@@ -11,7 +11,7 @@ export function safeJson(value, fallback = null) {
 }
 
 export function json(value) {
-  return JSON.stringify(value ?? null);
+  return JSON.stringify(value ?? null, (_, v) => typeof v === 'bigint' ? String(v) : v);
 }
 
 export function sleep(ms) {

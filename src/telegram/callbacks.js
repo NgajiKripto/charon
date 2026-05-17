@@ -29,6 +29,7 @@ import { requestNumericFilterInput, requestStrategyNumericInput } from './input.
 export async function handleCallback(query) {
   const data = query.data || '';
   const chatId = query.message?.chat?.id || TELEGRAM_CHAT_ID;
+  if (String(chatId) !== String(TELEGRAM_CHAT_ID)) return null;
   await answerCallback(query);
   if (!data.startsWith('input:') && !data.startsWith('stratinput:')) {
     const { pendingNumericInputs } = await import('./input.js');
@@ -54,7 +55,7 @@ export async function handleCallback(query) {
   if (data === 'menu:wallets') return editMenuMessage(query, walletsText(), navKeyboard());
   if (data === 'menu:positions') return editMenuMessage(query, positionsText(), navKeyboard());
   if (data === 'menu:pnl') {
-    const { sendPnl } = await import('./send.js');
+    const { sendPnl } = await import('./commands.js');
     return sendPnl(chatId, query);
   }
   if (data === 'menu:settings') return editMenuMessage(query, `${agentText()}\n\n${filtersText()}`, navKeyboard([

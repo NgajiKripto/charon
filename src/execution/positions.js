@@ -147,6 +147,7 @@ export async function refreshPosition(position, { autoExit = true, jupiterPnl = 
           const sell = await executeLiveSell({ ...position, token_amount_raw: String(sellAmount) }, 'PARTIAL_TP');
           const remaining = Number(position.token_amount_raw) - sellAmount;
           db.prepare('UPDATE dry_run_positions SET token_amount_raw = ? WHERE id = ?').run(String(remaining), position.id);
+          position.token_amount_raw = String(remaining);
           db.prepare(`
             INSERT INTO dry_run_trades (position_id, mint, side, at_ms, price, mcap, size_sol, token_amount_est, reason, payload_json)
             VALUES (?, ?, 'sell', ?, ?, ?, ?, ?, 'PARTIAL_TP', ?)

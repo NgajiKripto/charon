@@ -33,6 +33,7 @@ import { fetchWalletPnl } from '../enrichment/wallets.js';
 export async function handleMessage(msg) {
   const text = (msg.text || '').trim();
   const chatId = msg.chat.id;
+  if (String(chatId) !== String(TELEGRAM_CHAT_ID)) return;
   if (await consumeNumericFilterInput(chatId, text, msg.message_id)) return;
   if (!text.startsWith('/')) return;
   if (text.startsWith('/menu')) return sendMenu(chatId);
@@ -184,7 +185,15 @@ export async function closePosition(chatId, id, reason) {
   const pnlPercent = row.entry_mcap ? (Number(mcap) / Number(row.entry_mcap) - 1) * 100 : 0;
   const pnlSol = Number(row.size_sol) * pnlPercent / 100;
   let sell = null;
-  if (row.execution_mode === 'live') sell = await executeLiveSell(row, reason);
+  if (row.execution_mode === 'live') {
+    sell = await executeLiveSell(row, reason);
+    const receivedLamports = Number(sell?.outputAmount || 0);
+    const receivedSol = receivedLamports > 0 ? receivedLamports / 1_000_000_000 : null;
+    if (receivedSol != null) {
+      pnlSol = receivedSol - Number(row.size_sol);
+      pnlPercent = (receivedSol / Number(row.size_sol) - 1) * 100;
+    }
+  }
   db.prepare(`
     UPDATE dry_run_positions
     SET status = 'closed', closed_at_ms = ?, exit_price = ?, exit_mcap = ?, exit_reason = ?,
@@ -199,8 +208,11 @@ export async function closePosition(chatId, id, reason) {
   await bot.sendMessage(chatId, `${label} #${id}: ${escapeHtml(reason)} ${fmtPct(pnlPercent)}`, { parse_mode: 'HTML' });
 }
 
+const ALLOWED_POSITION_FIELDS = new Set(['tp_percent', 'sl_percent', 'trailing_percent']);
+
 export async function updatePositionRule(chatId, id, field, nextValue, query = null) {
   if (!Number.isFinite(nextValue)) return bot.sendMessage(chatId, 'Invalid value.');
+  if (!ALLOWED_POSITION_FIELDS.has(field)) return bot.sendMessage(chatId, 'Invalid field.');
   db.prepare(`UPDATE dry_run_positions SET ${field} = ? WHERE id = ?`).run(nextValue, id);
   const row = db.prepare('SELECT * FROM dry_run_positions WHERE id = ?').get(id);
   if (row) {
@@ -268,7 +280,7 @@ async function sendMenu(chatId = TELEGRAM_CHAT_ID) {
   });
 }
 
-async function sendPnl(chatId, query = null) {
+export async function sendPnl(chatId, query = null) {
   const wallets = savedWallets();
   if (!wallets.length) {
     const text = '📊 <b>PnL</b>\n\nNo saved wallets. Use /walletadd &lt;label&gt; &lt;address&gt;.';
